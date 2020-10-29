@@ -1,7 +1,7 @@
 module StructuralTransformations
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, lower_varname, value
+using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value
 
 # V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
 # differential variables and `y`s are algebraic variables.
@@ -135,6 +135,8 @@ function pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
             if i !== nothing
                 lhs = D(vars[vars_asso[i]])
                 if lhs in lhss
+                    # check only trivial equations are removed
+                    @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs))
                     lhs = Num(nothing)
                 end
                 lhs
@@ -165,6 +167,8 @@ end
 function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     neqs = length(edges)
     nvars = length(vars)
+    vcolor = falses(nvars)
+    ecolor = falses(neqs)
     assign = zeros(Int, nvars)
     eqs_asso = fill(0, neqs)
     neqs′ = neqs
@@ -180,8 +184,10 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
             # the derivatives and algebraic variables are zeros in the variable
             # association list
             active = vars_asso .== 0
-            vcolor = falses(nvars)
-            ecolor = falses(neqs)
+            resize!(vcolor, nvars)
+            fill!(vcolor, false)
+            resize!(ecolor, neqs)
+            fill!(ecolor, false)
             pathfound = match_equation!(edges, i, assign, active, vcolor, ecolor)
             pathfound && break # terminating condition
             # for every colored V-node j
@@ -189,10 +195,7 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
                 # introduce a new variable
                 nvars += 1
                 # introduce a differential variable (x)
-                lhsj = vars[j]
-                vj, order = var_from_nested_derivative(lhsj)
-                _newvarj = lower_varname(vj, iv, order)
-                newvarj = _newvarj
+                newvarj = diff2term(vars[j])
                 vars[j] = newvarj
                 vars_asso[j] = nvars
                 # introduce a derivative variable (dx)
