@@ -294,7 +294,10 @@ Use Tarjan's algorithm to find strongly connected components.
 function strongly_connected!(stack, onstack, components, lowlink, ids, edges, assign, eq, id)
     id += 1
     lowlink[eq] = ids[eq] = id
+
+    # add `eq` to the stack
     push!(stack, eq)
+    onstack[eq] = true
 
     # for `adjeq` in the adjacency list of `eq`
     for var in edges[eq]
@@ -309,7 +312,7 @@ function strongly_connected!(stack, onstack, components, lowlink, ids, edges, as
 
         # if `adjeq` is not yet idsed
         if ids[adjeq] == UNVISITED # visit unvisited nodes
-            id = strongly_connected!(stack, components, lowlink, ids, edges, assign, adjeq, id)
+            id = strongly_connected!(stack, onstack, components, lowlink, ids, edges, assign, adjeq, id)
         end
         # at the callback of the DFS
         if onstack[adjeq]
