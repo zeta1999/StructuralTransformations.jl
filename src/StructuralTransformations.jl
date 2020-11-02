@@ -58,6 +58,8 @@ function sys2bigraph(sys)
     return edges, fullvars, vars_asso
 end
 
+const UNASSIGNED = 0
+
 function match_equation!(edges, i, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
     # `edge[active]` are active edges
     # i: equations
@@ -66,9 +68,9 @@ function match_equation!(edges, i, assign, active, vcolor=falses(length(active))
     #
     # color the equation
     ecolor[i] = true
-    # if a V-node j exists s.t. edge (i-j) exists and assign[j] == 0
+    # if a V-node j exists s.t. edge (i-j) exists and assign[j] == UNASSIGNED
     for j in edges[i]
-        if active[j] && assign[j] == 0
+        if active[j] && assign[j] == UNASSIGNED
             assign[j] = i
             return true
         end
@@ -87,7 +89,7 @@ function match_equation!(edges, i, assign, active, vcolor=falses(length(active))
 end
 
 function matching(edges, nvars, active=trues(nvars))
-    assign = zeros(Int, nvars)
+    assign = fill(UNASSIGNED, nvars)
     for i in 1:length(edges)
         match_equation!(edges, i, assign, active)
     end
@@ -169,7 +171,7 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     nvars = length(vars)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
-    assign = zeros(Int, nvars)
+    assign = fill(UNVISITED, nvars)
     eqs_asso = fill(0, neqs)
     neqs′ = neqs
     D = Differential(iv)
@@ -201,7 +203,7 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
                 # introduce a derivative variable (dx)
                 push!(vars, D(newvarj))
                 push!(vars_asso, 0)
-                push!(assign, 0)
+                push!(assign, UNASSIGNED)
             end
 
             # for every colored E-node l
