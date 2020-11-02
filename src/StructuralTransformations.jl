@@ -15,8 +15,8 @@ function get_vnodes(sys)
     for (i, eq) in enumerate(eqs)
         if eq.lhs isa Symbolic
             # Make sure that the LHS is a first order derivative of a var.
-            @assert eq.lhs.op isa Differential
-            @assert !(eq.lhs.args[1] isa Differential) # first order
+            @assert eq.lhs.op isa Differential "The equation $eq is not in the form of `D(...) ~ ...`"
+            @assert !(eq.lhs.args[1] isa Differential) "The equation $eq is not first order"
 
             push!(dxvars, eq.lhs)
             # For efficiency we note down the diff edges here
@@ -105,9 +105,8 @@ function walk_and_substitute(expr, substitution_dict)
     elseif expr isa Term
         return Term(walk_and_substitute(expr.op, substitution_dict),
                          map(x->walk_and_substitute(x, substitution_dict), expr.args))
-    elseif expr isa Equation
-        error("TODO: can rhs contain equations?")
     else
+        @assert !(expr isa Equation) "RHS cannot contain equations"
         return expr
     end
 end
@@ -133,13 +132,13 @@ function pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
             0
         elseif eq.lhs isa Term && eq.lhs.op isa Differential
             # look up the variable that represents D(lhs)
-            @assert !(eq.lhs.args[1] isa Differential) # first order
+            @assert !(eq.lhs.args[1] isa Differential) "The equation $eq is not first order"
             i = get(d_dict, eq.lhs.args[1], nothing)
             if i !== nothing
                 lhs = D(vars[vars_asso[i]])
                 if lhs in lhss
                     # check only trivial equations are removed
-                    @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs))
+                    @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs)) "The duplicate equation is not trivial: $eq"
                     lhs = Num(nothing)
                 end
                 lhs
@@ -238,23 +237,6 @@ function dae_index_lowering(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
     edges, assign, vars_asso, eqs_asso, vars = pantelides!(edges, fullvars, vars_asso, sys.iv; kwargs...)
     return pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
-end
-
-# Debug use only
-print_bigraph(sys, vars, edges) = print_bigraph(stdout, sys, vars, edges)
-function print_bigraph(io::IO, sys, vars, edges)
-    println(io, "Equations:")
-    eqs = equations(sys)
-    foreach(x->println(io, x), [i => eqs[i] for i in 1:length(eqs)])
-    for (i, edge) in enumerate(edges)
-        println(io, "\nEq $i has:")
-        print(io, '[')
-        for e in edge
-            print(io, "$(vars[e]), ")
-        end
-        print(io, ']')
-    end
-    return nothing
 end
 
 ###
