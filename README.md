@@ -42,7 +42,7 @@ pendulum = ODESystem(eqs, t, [x, y, T], [L, g], name=:pendulum)
 # Turn into a first order differential equation system
 first_order_sys = ModelingToolkit.ode_order_lowering(pendulum)
 
-# Perform index reduction to get an Index 1 DAE
+# Perform index reduction to get an index 1 DAE
 new_sys = StructuralTransformations.dae_index_lowering(first_order_sys)
 
 u0 = [
@@ -66,4 +66,4 @@ plot(sol, vars=(D(x), y))
 ## Methods
 
 - `dae_index_lowering(sys::ODESystem)`: Performs the Pantelides Algorithm to
-  transform a higher index DAE to an Index 1 DAE.
+  transform a higher index DAE to an index 1 DAE.
