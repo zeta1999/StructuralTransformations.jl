@@ -256,5 +256,83 @@ function print_bigraph(io::IO, sys, vars, edges)
     return nothing
 end
 
+###
+### BLT ordering
+###
 
+const UNVISITED = 0
+
+"""
+    find_scc(edges, assign=nothing)
+
+Find strongly connected components of the graph defined by `edges`. When `assign
+=== nothing`, we assume that the ``i``-th variable is assigned to the ``i``-th
+equation.
+"""
+function find_scc(edges, assign=nothing)
+    id = 0
+    stack = Int[]
+    components = Vector{Int}[]
+    n = length(edges)
+    onstack = falses(n)
+    lowlink = zeros(Int, n)
+    ids = fill(UNVISITED, n)
+
+    for eq in 1:length(edges)
+        if ids[eq] == UNVISITED
+            id = strongly_connected!(stack, onstack, components, lowlink, ids, edges, assign, eq, id)
+        end
+    end
+    return components
 end
+
+"""
+    strongly_connected!(stack, onstack, components, lowlink, ids, edges, assign, eq, id)
+
+Use Tarjan's algorithm to find strongly connected components.
+"""
+function strongly_connected!(stack, onstack, components, lowlink, ids, edges, assign, eq, id)
+    id += 1
+    lowlink[eq] = ids[eq] = id
+    push!(stack, eq)
+
+    # for `adjeq` in the adjacency list of `eq`
+    for var in edges[eq]
+        if assign === nothing
+            adjeq = var
+        else
+            # assign[var] => the equation that's assigned to var
+            adjeq = assign[var]
+            # skip equations that are not assigned
+            adjeq == UNASSIGNED && continue
+        end
+
+        # if `adjeq` is not yet idsed
+        if ids[adjeq] == UNVISITED # visit unvisited nodes
+            id = strongly_connected!(stack, components, lowlink, ids, edges, assign, adjeq, id)
+        end
+        # at the callback of the DFS
+        if onstack[adjeq]
+            lowlink[eq] = min(lowlink[eq], lowlink[adjeq])
+        end
+    end
+
+    # if we are at a start of a strongly connected component
+    if lowlink[eq] == ids[eq]
+        component = Int[]
+        repeat = true
+        # pop until we are at the start of the strongly connected component
+        while repeat
+            w = pop!(stack)
+            onstack[w] = false
+            lowlink[w] = ids[eq]
+            # put `w` in current component
+            push!(component, w)
+            repeat = w != eq
+        end
+        push!(components, component)
+    end
+    return id
+end
+
+end # module
