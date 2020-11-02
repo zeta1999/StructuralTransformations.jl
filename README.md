@@ -1,4 +1,16 @@
-# StructuralTransformations.jl
+<h1 align="center"><a href="https://github.com/JuliaComputing/StructuralTransformations.jl">StructuralTransformations.jl</a></h1>
+
+<p align="center">
+  <a href="https://travis-ci.org/github/JuliaComputing/StructuralTransformations.jl">
+    <img src="https://travis-ci.org/JuliaComputing/StructuralTransformations.jl.svg?branch=master"
+         alt="Build Status">
+  </a>
+  </a>
+  <a href="https://coveralls.io/github/JuliaComputing/StructuralTransformations.jl?branch=master">
+    <img src="https://coveralls.io/repos/github/JuliaComputing/StructuralTransformations.jl/badge.svg?branch=master"
+         alt="Coverage Status">
+  </a>
+</p>
 
 StructuralTransformations.jl is a package for transforming ModelingToolkit models into structurally better
 versions for improved numerical simulation. These transformations are compiler passes on the model form,
