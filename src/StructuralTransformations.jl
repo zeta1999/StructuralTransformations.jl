@@ -233,6 +233,12 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     return edges, assign, vars_asso, eqs_asso, vars
 end
 
+"""
+    dae_index_lowering(sys::ODESystem) -> ODESystem
+
+Perform the Pantelides algorithm to transform a higher index DAE to an index 1
+DAE.
+"""
 function dae_index_lowering(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
     edges, assign, vars_asso, eqs_asso, vars = pantelides!(edges, fullvars, vars_asso, sys.iv; kwargs...)
