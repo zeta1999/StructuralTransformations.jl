@@ -1,5 +1,8 @@
 module StructuralTransformations
 
+const UNVISITED = 0
+const UNASSIGNED = 0
+
 using ModelingToolkit
 using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value
 
@@ -57,8 +60,6 @@ function sys2bigraph(sys)
     vars_asso = Int[(1:xvar_offset) .+ xvar_offset; zeros(Int, length(fullvars) - xvar_offset)] # variable association list
     return edges, fullvars, vars_asso
 end
-
-const UNASSIGNED = 0
 
 function match_equation!(edges, i, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
     # `edge[active]` are active edges
@@ -171,7 +172,7 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     nvars = length(vars)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
-    assign = fill(UNVISITED, nvars)
+    assign = fill(UNASSIGNED, nvars)
     eqs_asso = fill(0, neqs)
     neqs′ = neqs
     D = Differential(iv)
@@ -259,8 +260,6 @@ end
 ###
 ### BLT ordering
 ###
-
-const UNVISITED = 0
 
 """
     find_scc(edges, assign=nothing)
