@@ -34,6 +34,14 @@ edges, vars, vars_asso = StructuralTransformations.sys2bigraph(pendulum)
 @test StructuralTransformations.matching(edges, length(vars), vars_asso .== 0) == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
 edges, assign, vars_asso, eqs_asso, vars = StructuralTransformations.pantelides(pendulum)
+scc = StructuralTransformations.find_scc(edges, assign)
+@test sort(sort.(scc)) == [
+                           [1],
+                           [2],
+                           [3, 4, 7, 8, 9],
+                           [5],
+                           [6],
+                          ]
 
 @test sort.(edges) == sort.([
  [5, 3],               # 1
@@ -139,3 +147,25 @@ p = [
 prob_auto = ODEProblem(new_sys,u0,(0.0,100.0),p)
 sol = solve(prob_auto, Rodas5());
 #plot(sol, vars=(D(x), y))
+
+###
+### More BLT/SCC tests
+###
+
+# Test Tarjan (1972) Fig. 3
+graph = [
+         [2],
+         [3,8],
+         [4,7],
+         [5],
+         [3,6],
+         Int[],
+         [4,6],
+         [1,7],
+        ]
+scc = StructuralTransformations.find_scc(graph)
+@test sort(sort.(scc)) == [
+                           [1, 2, 8],
+                           [3, 4, 5, 7],
+                           [6],
+                          ]

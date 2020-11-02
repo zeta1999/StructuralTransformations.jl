@@ -1,3 +1,3 @@
 using SafeTestsets
 
-@safetestset "Index Reduction" begin include("index_reduction.jl") end
+@safetestset "Index Reduction & SCC" begin include("index_reduction.jl") end
