@@ -57,11 +57,11 @@ function sys2bigraph(sys; find_solvables = false)
 
     if find_solvables
         solvable_edges = map(_->Int[], 1:length(eqs))
-        J = ModelingToolkit.jacobian(map(eq->eq.rhs-eq.lhs, eqs), fullvars)
-        for eq in 1:length(eqs), var in 1:length(fullvars)
-            v = value(J[eq, var])
+        for (i, eq) in enumerate(eqs), (j, var) in enumerate(fullvars)
+            D = Differential(var)
+            v = expand_derivatives(D(value(eq.rhs-eq.lhs)), true)
             if !(v isa Symbolic) && v isa Integer && v != 0
-                push!(solvable_edges[eq], var)
+                push!(solvable_edges[i], j)
             end
         end
         return edges, solvable_edges, fullvars, vars_asso
