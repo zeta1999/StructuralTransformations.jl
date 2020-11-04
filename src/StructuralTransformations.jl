@@ -4,7 +4,7 @@ const UNVISITED = 0
 const UNASSIGNED = 0
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value
+using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value, operation
 
 ###
 ### System -> structural information
@@ -135,8 +135,26 @@ function pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
     fill!(out_eqs, nothing)
     out_eqs[1:length(in_eqs)] .= in_eqs
 
-    d_dict = Dict(zip(vars, 1:length(vars)))
+    out_vars = Vector{Any}(undef, length(vars_asso))
+    fill!(out_vars, nothing)
+    out_vars[1:length(vars)] .= vars
+
     D = ModelingToolkit.Differential(sys.iv)
+
+    for (i, v) in enumerate(vars_asso)
+        # vars[v] = D(vars[i])
+        v == 0 && continue
+        vi = out_vars[i]
+        @assert vi !== nothing "Something went wrong on reconstructing states from variable association list"
+        # `vars[i]` needs to be not a `D(...)`, because we want the DAE to be
+        # first-order.
+        if vi isa Term && operation(vi) isa Differential
+            vi = out_vars[i] = diff2term(vi)
+        end
+        out_vars[v] = D(vi)
+    end
+
+    d_dict = Dict(zip(vars, 1:length(vars)))
     lhss = Set{Any}([x.lhs for x in in_eqs if x.lhs isa Term && x.lhs.op isa Differential])
     for (i, e) in enumerate(eqs_asso)
         if e === 0
@@ -152,7 +170,7 @@ function pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
             @assert !(eq.lhs.args[1] isa Differential) "The equation $eq is not first order"
             i = get(d_dict, eq.lhs.args[1], nothing)
             if i !== nothing
-                lhs = D(vars[vars_asso[i]])
+                lhs = D(out_vars[vars_asso[i]])
                 if lhs in lhss
                     # check only trivial equations are removed
                     @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs)) "The duplicate equation is not trivial: $eq"
@@ -185,7 +203,7 @@ Perform graph based Pantelides algorithm.
 """
 function pantelides(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
-    return pantelides!(edges, fullvars, vars_asso, sys.iv; kwargs...)
+    return pantelides!(edges, vars_asso, sys.iv; kwargs...)
 end
 
 """
@@ -193,9 +211,9 @@ end
 
 Perform Pantelides algorithm.
 """
-function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
+function pantelides!(edges, vars_asso, iv; maxiters = 8000)
     neqs = length(edges)
-    nvars = length(vars)
+    nvars = length(vars_asso)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
     assign = fill(UNASSIGNED, nvars)
@@ -222,12 +240,8 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
             for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                # turn `var` into a state: `D(x)` -> `x_t`
-                newvar = diff2term(vars[var])
-                vars[var] = newvar
                 # the new variable is the derivative of `var`
                 vars_asso[var] = nvars
-                push!(vars, D(newvar))
                 push!(vars_asso, 0)
                 push!(assign, UNASSIGNED)
             end
@@ -247,13 +261,15 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
             end
 
             for var in eachindex(vcolor); vcolor[var] || continue
+                # the newly introduced `var`s and `eq`s have the inherits
+                # assignment
                 assign[vars_asso[var]] = eqs_asso[assign[var]]
             end
             eq′ = eqs_asso[eq′]
         end # for _ in 1:maxiters
         pathfound || error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
-    return edges, assign, vars_asso, eqs_asso, vars
+    return edges, assign, vars_asso, eqs_asso
 end
 
 """
@@ -264,8 +280,8 @@ DAE.
 """
 function dae_index_lowering(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
-    edges, assign, vars_asso, eqs_asso, vars = pantelides!(edges, fullvars, vars_asso, sys.iv; kwargs...)
-    return pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
+    edges, assign, vars_asso, eqs_asso = pantelides!(edges, vars_asso, sys.iv; kwargs...)
+    return pantelides_reassemble(sys, fullvars, vars_asso, eqs_asso, assign)
 end
 
 ###

@@ -33,7 +33,7 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 edges, vars, vars_asso = StructuralTransformations.sys2bigraph(pendulum)
 @test StructuralTransformations.matching(edges, length(vars), vars_asso .== 0) == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
-edges, assign, vars_asso, eqs_asso, vars = StructuralTransformations.pantelides(pendulum)
+edges, assign, vars_asso, eqs_asso = StructuralTransformations.pantelides(pendulum)
 scc = StructuralTransformations.find_scc(edges, assign)
 @test sort(sort.(scc)) == [
                            [1],
@@ -57,7 +57,6 @@ scc = StructuralTransformations.find_scc(edges, assign)
 #                  [1, 2, 3, 4,   5,   6,  7,  8, 9,   10,   11]
 #                  [x, y, w, z, xˍt, yˍt, w', z', T, xˍt', yˍt']
 @test vars_asso  == [5, 6, 7, 8,  10,  11,    0,    0, 0,      0,      0]
-@test isequal(vars, [x, y, w, z, xˍt, yˍt, D(w), D(z), T, D(xˍt), D(yˍt)])
 #1: D(x) ~ w
 #2: D(y) ~ z
 #3: D(w) ~ T*x
