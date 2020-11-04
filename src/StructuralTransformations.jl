@@ -6,6 +6,10 @@ const UNASSIGNED = 0
 using ModelingToolkit
 using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value
 
+###
+### System -> structural information
+###
+
 # V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
 # differential variables and `y`s are algebraic variables.
 function get_vnodes(sys)
@@ -61,41 +65,54 @@ function sys2bigraph(sys)
     return edges, fullvars, vars_asso
 end
 
-function match_equation!(edges, i, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
-    # `edge[active]` are active edges
-    # i: equations
-    # j: variables
-    # assign: assign[j] == i means (i-j) is assigned
-    #
-    # color the equation
-    ecolor[i] = true
-    # if a V-node j exists s.t. edge (i-j) exists and assign[j] == UNASSIGNED
-    for j in edges[i]
-        if active[j] && assign[j] == UNASSIGNED
-            assign[j] = i
+# Equation-variable bipartite matching
+"""
+    find_augmenting_path(edges, eq, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges))) -> path_found::Bool
+
+Try to find augmenting paths.
+"""
+function find_augmenting_path(edges, eq, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
+    # Note: `edge[active]` are active edges
+    ecolor[eq] = true
+
+    # if a `var` is unassigned and the edge `eq <=> var` exists
+    for var in edges[eq]
+        if active[var] && assign[var] == UNASSIGNED
+            assign[var] = eq
             return true
         end
     end
-    # for every j such that edge (i-j) exists and j is uncolored
-    for j in edges[i]
-        (active[j] && !vcolor[j]) || continue
-        # color the variable
-        vcolor[j] = true
-        if match_equation!(edges, assign[j], assign, active, vcolor, ecolor)
-            assign[j] = i
+
+    # for every `var` such that edge `eq <=> var` exists and `var` is uncolored
+    for var in edges[eq]
+        (active[var] && !vcolor[var]) || continue
+        vcolor[var] = true
+        if find_augmenting_path(edges, assign[var], assign, active, vcolor, ecolor)
+            assign[var] = eq
             return true
         end
     end
     return false
 end
 
+"""
+    find_augmenting_path(edges, nvars, active=trues(nvars)) -> assign
+
+Find equation-variable bipartite matching. `edges` is a bipartite graph. `nvars`
+is the number of variables. Matched variables and equations are stored in like
+`assign[var] => eq`.
+"""
 function matching(edges, nvars, active=trues(nvars))
     assign = fill(UNASSIGNED, nvars)
-    for i in 1:length(edges)
-        match_equation!(edges, i, assign, active)
+    for eq in 1:length(edges)
+        find_augmenting_path(edges, eq, assign, active)
     end
     return assign
 end
+
+###
+### Reassemble: structural information -> system
+###
 
 # Naive subtree matching, we can make the dict have levels
 # Going forward we should look into storing the depth in Terms
@@ -161,11 +178,21 @@ function pantelides_reassemble(sys, vars, vars_asso, eqs_asso, assign)
     return ODESystem(final_eqs, sys.iv, final_vars, sys.ps)
 end
 
+"""
+    pantelides(sys::ODESystem; kwargs...)
+
+Perform graph based Pantelides algorithm.
+"""
 function pantelides(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
     return pantelides!(edges, fullvars, vars_asso, sys.iv; kwargs...)
 end
 
+"""
+    pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
+
+Perform Pantelides algorithm.
+"""
 function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     neqs = length(edges)
     nvars = length(vars)
@@ -176,7 +203,7 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
     neqs′ = neqs
     D = Differential(iv)
     for k in 1:neqs′
-        i = k
+        eq′ = k
         pathfound = false
         # In practice, `maxiters=8000` should never be reached, otherwise, the
         # index would be on the order of thousands.
@@ -190,43 +217,39 @@ function pantelides!(edges, vars, vars_asso, iv; maxiters = 8000)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
             fill!(ecolor, false)
-            pathfound = match_equation!(edges, i, assign, active, vcolor, ecolor)
+            pathfound = find_augmenting_path(edges, eq′, assign, active, vcolor, ecolor)
             pathfound && break # terminating condition
-            # for every colored V-node j
-            for j in eachindex(vcolor); vcolor[j] || continue
+            for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                # introduce a differential variable (x)
-                newvarj = diff2term(vars[j])
-                vars[j] = newvarj
-                vars_asso[j] = nvars
-                # introduce a derivative variable (dx)
-                push!(vars, D(newvarj))
+                # turn `var` into a state: `D(x)` -> `x_t`
+                newvar = diff2term(vars[var])
+                vars[var] = newvar
+                # the new variable is the derivative of `var`
+                vars_asso[var] = nvars
+                push!(vars, D(newvar))
                 push!(vars_asso, 0)
                 push!(assign, UNASSIGNED)
             end
 
-            # for every colored E-node l
-            for l in eachindex(ecolor); ecolor[l] || continue
+            for eq in eachindex(ecolor); ecolor[eq] || continue
+                # introduce a new equation
                 neqs += 1
-                # create new E-node
-                push!(edges, copy(edges[l]))
-                # create edges from E-node `neqs` to all V-nodes `j` and
-                # `vars_asso[j]` s.t. edge `(l-j)` exists
-                for j in edges[l]
-                    if !(vars_asso[j] in edges[neqs])
-                        push!(edges[neqs], vars_asso[j])
+                push!(edges, copy(edges[eq]))
+                # the new equation is created by differentiating `eq`
+                eqs_asso[eq] = neqs
+                for var in edges[eq]
+                    if !(vars_asso[var] in edges[neqs])
+                        push!(edges[neqs], vars_asso[var])
                     end
                 end
                 push!(eqs_asso, 0)
-                eqs_asso[l] = neqs
             end
 
-            # for every colored V-node j
-            for j in eachindex(vcolor); vcolor[j] || continue
-                assign[vars_asso[j]] = eqs_asso[assign[j]]
+            for var in eachindex(vcolor); vcolor[var] || continue
+                assign[vars_asso[var]] = eqs_asso[assign[var]]
             end
-            i = eqs_asso[i]
+            eq′ = eqs_asso[eq′]
         end # for _ in 1:maxiters
         pathfound || error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
