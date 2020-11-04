@@ -37,7 +37,7 @@ function get_vnodes(sys)
     return xvars, dxvars, edges, algvars
 end
 
-function sys2bigraph(sys)
+function sys2bigraph(sys; find_solvable = false)
     xvars, dxvars, edges, algvars = get_vnodes(sys)
     xvar_offset = length(xvars)
     algvar_offset = 2xvar_offset
@@ -66,7 +66,20 @@ function sys2bigraph(sys)
 
     fullvars = [xvars; dxvars; algvars] # full list of variables
     vars_asso = Int[(1:xvar_offset) .+ xvar_offset; zeros(Int, length(fullvars) - xvar_offset)] # variable association list
-    return edges, fullvars, vars_asso
+
+    if find_solvable
+        solvable_edges = map(_->Int[], 1:length(eqs))
+        J = ModelingToolkit.jacobian(map(eq->eq.rhs-eq.lhs, eqs), fullvars)
+        for eq in 1:length(eqs), var in 1:length(fullvars)
+            v = value(J[eq, var])
+            if !(v isa Symbolic) && v isa Integer && v != 0
+                push!(solvable_edges[eq], var)
+            end
+        end
+        return edges, solvable_edges, fullvars, vars_asso
+    else
+        return edges, fullvars, vars_asso
+    end
 end
 
 # Equation-variable bipartite matching
