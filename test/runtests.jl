@@ -17,4 +17,5 @@ function print_bigraph(io::IO, sys, vars, edges)
     return nothing
 end
 
+@safetestset "Utilities" begin include("utils.jl") end
 @safetestset "Index Reduction & SCC" begin include("index_reduction.jl") end

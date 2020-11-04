@@ -4,7 +4,11 @@ const UNVISITED = 0
 const UNASSIGNED = 0
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential, states, equations, vars, Symbolic, diff2term, value, operation
+using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
+                       states, equations, vars, Symbolic, diff2term, value,
+                       operation, arguments, Sym, Term, simplify
+
+include("utils.jl")
 
 ###
 ### System -> structural information
