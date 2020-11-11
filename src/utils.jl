@@ -70,6 +70,18 @@ function sys2bigraph(sys; find_solvables = false)
     end
 end
 
+###
+### Miscellaneous
+###
+
+function inverse_mapping(assign)
+    invassign = zeros(Int, length(assign))
+    for (i, eq) in enumerate(assign)
+        invassign[eq] = i
+    end
+    return invassign
+end
+
 #=
 TODO: optimized solvable variable detection
 function add_coeff!(dict, term, coeff, sign)

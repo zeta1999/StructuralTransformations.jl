@@ -9,6 +9,7 @@ using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
                        operation, arguments, Sym, Term, simplify
 
 include("utils.jl")
+include("tearing.jl")
 
 # Equation-variable bipartite matching
 """
@@ -307,6 +308,52 @@ function strongly_connected!(stack, onstack, components, lowlink, ids, edges, as
         push!(components, component)
     end
     return id
+end
+
+"""
+    tear_graph!(assign, edges, solvable_edges) -> (assign, torn_components)
+
+Tear the bipartite graph by updating `assign`.
+"""
+function tear_graph!(assign, edges, solvable_edges)
+    components = find_scc(edges, assign)
+    inv_assign = inverse_mapping(assign)
+    torn_components = Vector{Int}[]
+
+    for component in components
+        # fast pass
+        if length(component) == 1
+            push!(torn_components, component)
+            continue
+        end
+        eqs = copy(component)
+        vars = inv_assign[eqs]
+
+        td = TraverseDAG(edges, length(assign))
+        (eSolved, vSolved, eResidue, vTear) = tearEquations!(td, solvable_edges, eqs, vars)
+
+        for e in eSolved
+            push!(torn_components, [e])
+        end
+
+        push!(torn_components, eResidue)
+
+        for i in 1:length(eSolved)
+            assign[vSolved[i]] = eSolved[i]
+        end
+        for i in 1:length(eResidue)
+            # Mark by 0 that the equation can not be solved symbolically even if possible.
+            assign[vTear[i]] = 0 # eResidue[i]
+            @show eResidue[i]
+        end
+
+        if length(component) > length(eResidue)
+            @info("Reduced system of equation size from $(length(component)) to $(length(eResidue))")
+        else
+            @info("No reduction of system of equation size $(length(c))")
+        end
+    end
+    return assign, torn_components
 end
 
 end # module
